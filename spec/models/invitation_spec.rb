@@ -1,83 +1,52 @@
 require "rails_helper"
 
 RSpec.describe Invitation do
-  let(:invitation) { build(:invitation, team: team, user: new_user) }
-  let(:new_user) { create(:user, email: "rookie@example.com") }
-  let(:team) { create(:team, name: "A fine team") }
-  let(:team_owner) { create(:user) }
-
-  before do
-    team.update!(owner: team_owner)
-    team_owner.update!(team: team)
-  end
-
   describe "callbacks" do
-    describe "after_save" do
-      context "with valid data" do
-        it "invites the user" do
-          invitation.save
-          expect(new_user).to be_invited
-        end
-      end
+    it "invites the user after saving with valid data" do
+      team = Team.new(name: "A fine team")
+      new_user = User.new(email: "rookie@example.com")
+      invitation = Invitation.new(team: team, user: new_user)
 
-      context "with invalid data" do
-        before do
-          invitation.team = nil
-          invitation.save
-        end
+      invitation.save
 
-        it "does not save the invitation" do
-          expect(invitation).not_to be_valid
-          expect(invitation).to be_new_record
-        end
+      expect(new_user.invited).to eq true
+    end
 
-        it "does not mark the user as invited" do
-          expect(new_user).not_to be_invited
-        end
-      end
+    it "does not save the invitation and does not invite the user with invalid data" do
+      new_user = User.new(email: "rookie@example.com")
+      invitation = Invitation.new(team: nil, user: new_user)
+
+      invitation.save
+
+      expect(invitation.valid?).to eq false
+      expect(invitation.new_record?).to eq true
+
+      expect(new_user.invited).not_to eq true
     end
   end
 
   describe "#event_log_statement" do
-    context "when the record is saved" do
-      before do
-        invitation.save
-      end
+    it "logs the name of the team and the invitee when saved" do
+      team = Team.new(name: "A fine team")
+      new_user = User.new(email: "rookie@example.com")
+      invitation = Invitation.new(team: team, user: new_user)
 
-      it "include the name of the team" do
-        log_statement = invitation.event_log_statement
-        expect(log_statement).to include("A fine team")
-      end
+      invitation.save
 
-      it "include the email of the invitee" do
-        log_statement = invitation.event_log_statement
-        expect(log_statement).to include("rookie@example.com")
-      end
+      expect(invitation.event_log_statement).to eq("rookie@example.com invited to A fine team")
     end
 
-    context "when the record is not saved but valid" do
-      it "includes the name of the team" do
-        log_statement = invitation.event_log_statement
-        expect(log_statement).to include("A fine team")
-      end
+    it "is prefaced by the wording PENDING when the record is not saved but valid" do
+      team = Team.new(name: "A fine team")
+      new_user = User.new(email: "rookie@example.com")
+      invitation = Invitation.new(team: team, user: new_user)
 
-      it "includes the email of the invitee" do
-        log_statement = invitation.event_log_statement
-        expect(log_statement).to include("rookie@example.com")
-      end
-
-      it "includes the word 'PENDING'" do
-        log_statement = invitation.event_log_statement
-        expect(log_statement).to include("PENDING")
-      end
+      expect(invitation.event_log_statement).to eq("PENDING - rookie@example.com invited to A fine team")
     end
 
-    context "when the record is not saved and not valid" do
-      it "includes INVALID" do
-        invitation.user = nil
-        log_statement = invitation.event_log_statement
-        expect(log_statement).to include("INVALID")
-      end
+    it "returns INVALID when the record is not saved and not valid" do
+      invitation = Invitation.new(team: nil, user: nil)
+        expect(invitation.event_log_statement).to eq("INVALID")
     end
   end
 end
